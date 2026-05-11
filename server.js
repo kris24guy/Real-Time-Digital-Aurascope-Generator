@@ -66,6 +66,25 @@ app.post("/aurascope", (req, res) => {
   }
 });
 
+// NEW: Registration endpoint for Step 1
+app.post("/register", (req, res) => {
+  const { email, name } = req.body || {};
+
+  if (!email) {
+    return res.status(400).json({ error: "email is required" });
+  }
+
+  const sessionId = `session_${Date.now()}`;
+
+  console.log("New registration:", { email, name, sessionId });
+
+  return res.json({
+    success: true,
+    sessionId,
+    message: "Registration successful"
+  });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`AuraSpanse server running on port ${PORT}`);

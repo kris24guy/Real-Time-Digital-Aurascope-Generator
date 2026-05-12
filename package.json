@@ -4,8 +4,8 @@
   "description": "AuraSpanse / AuraScope real-time digital aura reading API",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
-  },
+    "start": "node dist/server/_core/index.js" // or ts-node src/server/_core/index.ts, etc.
+}
   "dependencies": {
     "express": "^4.19.2"
   }

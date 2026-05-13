@@ -261,229 +261,44 @@ app.get('/', (req, res) => res.send(homePage()));
 // ============================================================
 // HTML
 // ============================================================
-function homePage() {
+function fullReadingPage({ color, signCap, dob, slice, hour, fmt, email }) {
   return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Real-Time Digital Aurascope</title>
-<meta name="description" content="Your evolving aura generated from zodiac traits, birthstone resonance, and the 24-hour color spectrum."/>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#000;color:#fff;font-family:'Segoe UI',system-ui,sans-serif;overflow-x:hidden;min-height:100vh}
-canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
-.page{position:relative;z-index:1;display:none;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;padding:48px 24px;text-align:center}
-.page.active{display:flex}
-.eyebrow{font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:#555;margin-bottom:16px}
-h1{font-size:clamp(26px,5vw,48px);font-weight:300;letter-spacing:.04em;margin-bottom:12px}
-h1 span{color:#c084fc}
-.tagline{color:#666;font-size:13px;max-width:380px;line-height:1.8;margin-bottom:40px}
-form{width:100%;max-width:340px;display:flex;flex-direction:column;gap:14px}
-.field label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#444;display:block;margin-bottom:6px}
-input{width:100%;padding:13px 16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:10px;color:#fff;font-size:14px;outline:none;transition:border .2s}
-input:focus{border-color:rgba(124,58,237,.6)}
-.btn{width:100%;padding:14px;background:#7c3aed;border:none;border-radius:10px;color:#fff;font-size:13px;font-weight:500;cursor:pointer;letter-spacing:.05em;transition:background .2s;margin-top:4px}
-.btn:hover{background:#6d28d9}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn-ghost{padding:12px 32px;border:1px solid rgba(255,255,255,.12);border-radius:10px;background:transparent;color:#888;font-size:13px;cursor:pointer;transition:all .2s;letter-spacing:.04em}
-.btn-ghost:hover{border-color:#7c3aed;color:#c084fc}
-.orb{width:96px;height:96px;border-radius:50%;margin:0 auto 20px;filter:blur(3px);opacity:.9}
-.counter{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#444;margin-bottom:28px}
-.orb-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#555;margin-bottom:6px}
-.orb-name{font-size:20px;font-weight:400;color:#fff;margin-bottom:10px}
-.orb-desc{font-size:13px;color:#888;line-height:1.8;max-width:320px;margin:0 auto 20px}
-.pills{margin-bottom:28px}
-.pill{display:inline-block;padding:4px 12px;border-radius:20px;font-size:11px;margin:3px}
-.pill-pos{background:rgba(52,211,153,.1);color:#34d399}
-.pill-neg{background:rgba(248,113,113,.09);color:#f87171}
-.trio{display:flex;justify-content:center;margin-bottom:24px}
-.trio-orb{width:52px;height:52px;border-radius:50%;margin:0 -8px;filter:blur(4px);opacity:.8}
-.blur-text{font-size:13px;color:#888;line-height:1.8;filter:blur(5px);pointer-events:none;max-width:340px;margin:0 auto 28px}
-.cta-box{border:1px solid rgba(124,58,237,.2);border-radius:14px;padding:28px 24px;background:rgba(124,58,237,.04);width:100%;max-width:360px}
-.cta-box h3{font-size:15px;font-weight:400;color:#c084fc;margin-bottom:8px}
-.price-strike{font-size:12px;color:#444;text-decoration:line-through;margin-bottom:4px}
-.price-main{font-size:22px;color:#f0abfc;font-weight:600;margin-bottom:6px}
-.price-note{font-size:11px;color:#444;margin-bottom:20px;line-height:1.6}
-.secure{font-size:10px;color:#333;margin-top:10px;letter-spacing:.06em}
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.fade{animation:fadeUp .5s ease both}
-@keyframes pulse{0%,100%{opacity:.75;transform:scale(1)}50%{opacity:1;transform:scale(1.07)}}
-.pulsing{animation:pulse 3s ease-in-out infinite}
-</style>
-</head>
-<body>
-<canvas id="bg"></canvas>
+<html>
+  <head>
+    <title>Your Aurascope Reading ✦</title>
+    <style>
+      *{box-sizing:border-box;margin:0;padding:0}
+      body{background:#000;color:#e2d9f3;font-family:'Segoe UI',system-ui,sans-serif;padding:60px 20px;min-height:100vh}
+      .wrap{max-width:620px;margin:0 auto}
+      .orb{width:64px;height:64px;border-radius:50%;background:${color};margin:0 auto 20px;filter:blur(4px);opacity:.8}
+      .eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#555;text-align:center;margin-bottom:10px}
+      h1{font-size:26px;font-weight:300;text-align:center;color:#c084fc;margin-bottom:6px}
+      .meta{text-align:center;font-size:11px;color:#444;margin-bottom:36px;letter-spacing:.06em;line-height:1.8}
+      .card{background:rgba(255,255,255,.025);border:1px solid rgba(124,58,237,.2);border-radius:14px;padding:32px 28px;line-height:2;font-size:14px;color:#bbb}
+      .card strong{color:#e2d9f3;font-weight:500}
+      .footer{text-align:center;margin-top:36px;font-size:11px;color:#333;line-height:1.9}
+      a{color:#7c3aed;text-decoration:none}
+      a:hover{color:#c084fc}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="orb"></div>
+      <p class="eyebrow">Aurascope — Full Reading</p>
+      <h1>✦ Your Aura Reading</h1>
+      <p class="meta">${signCap} · ${dob || ''}  
+${slice.label} · Hour ${hour} · ${slice.energy}</p>
+      <div class="card">${fmt}</div>
+      <p class="footer">
+        Sent to your Auraspanse: ${email || 'your account'}  
 
-<div class="page active" id="pg-landing">
-  <p class="eyebrow">Real-Time Digital</p>
-  <h1>Aura<span>scope</span></h1>
-  <p class="tagline">Your evolving aura, generated from your zodiac signature, birthstone resonance, and the living 24-hour color spectrum.</p>
-  <form id="mainForm">
-    <div class="field"><label>Email — your Auraspanse address</label><input type="email" id="email" placeholder="you@email.com" required/></div>
-    <div class="field"><label>Date of birth</label><input type="date" id="dob" required/></div>
-    <button class="btn" id="startBtn" type="submit">Read My Aura →</button>
-  </form>
-</div>
+        Your aura evolves as time moves through the 24-hour spectrum.  
+  
 
-<div class="page" id="pg-reveal">
-  <p class="counter" id="counter">Color 1 of 3</p>
-  <div class="orb pulsing" id="rOrb"></div>
-  <p class="orb-label" id="rLabel"></p>
-  <p class="orb-name" id="rName"></p>
-  <p class="orb-desc" id="rDesc"></p>
-  <div class="pills" id="rPills"></div>
-  <button class="btn-ghost fade" id="rBtn">Reveal Color 2 →</button>
-</div>
-
-<div class="page" id="pg-peek">
-  <p class="eyebrow fade">Your aura signature</p>
-  <div class="trio fade" id="trio"></div>
-  <p class="blur-text" id="peekText">
-    Your aura is a living weave of zodiac fire, birthstone memory, and the current moment in the 24-hour spectrum.
-    The full reading reveals all 63 trait-blends unique to your Auraspanse, your personal forecast, and what your aura is asking of you today.
-  </p>
-  <div class="cta-box fade">
-    <h3>Unlock your full aura reading</h3>
-    <p class="price-strike">Usually $12</p>
-    <p class="price-main">$1 intro offer</p>
-    <p class="price-note">Full reading sent to your Auraspanse email<br>+ added to your aura record</p>
-    <button class="btn" id="payBtn">Get Full Reading for $1 →</button>
-    <p class="secure">🔒 Secure checkout via Stripe</p>
-  </div>
-</div>
-
-<script>
-const canvas = document.getElementById('bg');
-const ctx = canvas.getContext('2d');
-let W,H,mx,my,orbs=[];
-let bgColors=['#7c3aed','#4f46e5','#9333ea'];
-let t0=Date.now();
-function resize(){W=canvas.width=innerWidth;H=canvas.height=innerHeight;mx=W/2;my=H/2}
-resize(); addEventListener('resize',resize);
-addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY});
-function mkOrbs(){orbs=bgColors.map((c,i)=>({x:W/2+(i-1)*130,y:H/2,vx:(Math.random()-.5)*.3,vy:(Math.random()-.5)*.3,r:170+i*50,color:c,ph:i*2.2}))}
-mkOrbs();
-function draw(){
-  ctx.clearRect(0,0,W,H);
-  ctx.globalCompositeOperation='screen';
-  const t=(Date.now()-t0)*.0006;
-  orbs.forEach(o=>{
-    o.x+=(mx-o.x)*.014+Math.sin(t+o.ph)*.6;
-    o.y+=(my-o.y)*.014+Math.cos(t+o.ph*1.3)*.5;
-    const g=ctx.createRadialGradient(o.x,o.y,0,o.x,o.y,o.r);
-    g.addColorStop(0,o.color+'4A'); g.addColorStop(1,'transparent');
-    ctx.beginPath(); ctx.arc(o.x,o.y,o.r,0,Math.PI*2);
-    ctx.fillStyle=g; ctx.fill();
-  });
-  ctx.globalCompositeOperation='source-over';
-  requestAnimationFrame(draw);
-}
-draw();
-
-let state={email:'',dob:'',preview:null};
-
-document.getElementById('mainForm').onsubmit=async e=>{
-  e.preventDefault();
-  const btn=document.getElementById('startBtn');
-  state.email=document.getElementById('email').value;
-  state.dob=document.getElementById('dob').value;
-  btn.textContent='Reading...'; btn.disabled=true;
-  try{
-    const r=await fetch('/api/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({dob:state.dob})});
-    state.preview=await r.json();
-    bgColors=state.preview.colors.map(c=>c.color);
-    mkOrbs();
-    showReveal(0);
-  }catch(err){
-    btn.textContent='Read My Aura →'; btn.disabled=false;
-    alert('Could not read aura — please try again.');
-  }
-};
-
-function show(id){['pg-landing','pg-reveal','pg-peek'].forEach(p=>{
-  const el=document.getElementById(p);
-  el.classList.toggle('active',p===id);
-})}
-
-function showReveal(idx){
-  show('pg-reveal');
-  const c=state.preview.colors[idx];
-  document.getElementById('counter').textContent='Color '+(idx+1)+' of 3';
-  document.getElementById('rOrb').style.background=c.color;
-  document.getElementById('rLabel').textContent=c.label.toUpperCase();
-  document.getElementById('rName').textContent=c.name||'';
-  document.getElementById('rDesc').textContent=c.desc||'';
-  document.getElementById('rPills').innerHTML=
-    (c.pos?'<span class="pill pill-pos">+ '+c.pos+'</span>':'')+
-    (c.neg?'<span class="pill pill-neg">– '+c.neg+'</span>':'');
-  const btn=document.getElementById('rBtn');
-  if(idx<2){btn.textContent='Reveal Color '+(idx+2)+' →';btn.onclick=()=>showReveal(idx+1);}
-  else{btn.textContent='See Your Aura Blend →';btn.onclick=showPeek;}
-}
-
-function showPeek(){
-  show('pg-peek');
-  document.getElementById('trio').innerHTML=state.preview.colors.map(c=>'<div class="trio-orb pulsing" style="background:'+c.color+'"></div>').join('');
-  document.getElementById('payBtn').onclick=startPayment;
-}
-
-async function startPayment(){
-  const btn=document.getElementById('payBtn');
-  btn.textContent='Opening Stripe...'; btn.disabled=true;
-  try{
-    const r=await fetch('/create-payment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:state.email,dob:state.dob})});
-    const d=await r.json();
-    if(d.url)window.location.href=d.url;
-    else throw new Error();
-  }catch{
-    btn.textContent='Get Full Reading for $1 →'; btn.disabled=false;
-    alert('Payment error — please try again.');
-  }
-}
-</script>
-</body>
-</html>`;
-}
-
-function successPage(reading, email, signCap, sign, dob, hour, slice) {
-  const color = ZODIAC_COLORS[sign]||'#7c3aed';
-  const fmt   = reading.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/\n/g,'<br>');
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Your Aurascope Reading ✦</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#000;color:#e2d9f3;font-family:'Segoe UI',system-ui,sans-serif;padding:60px 20px;min-height:100vh}
-.wrap{max-width:620px;margin:0 auto}
-.orb{width:64px;height:64px;border-radius:50%;background:${color};margin:0 auto 20px;filter:blur(4px);opacity:.8}
-.eyebrow{font-size:10px;letter-spacing:.16em;text-transform:uppercase;color:#555;text-align:center;margin-bottom:10px}
-h1{font-size:26px;font-weight:300;text-align:center;color:#c084fc;margin-bottom:6px}
-.meta{text-align:center;font-size:11px;color:#444;margin-bottom:36px;letter-spacing:.06em;line-height:1.8}
-.card{background:rgba(255,255,255,.025);border:1px solid rgba(124,58,237,.2);border-radius:14px;padding:32px 28px;line-height:2;font-size:14px;color:#bbb}
-.card strong{color:#e2d9f3;font-weight:500}
-.footer{text-align:center;margin-top:36px;font-size:11px;color:#333;line-height:1.9}
-a{color:#7c3aed;text-decoration:none}
-a:hover{color:#c084fc}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="orb"></div>
-  <p class="eyebrow">Aurascope — Full Reading</p>
-  <h1>✦ Your Aura Reading</h1>
-  <p class="meta">${signCap} · ${dob||''}<br>${slice.label} · Hour ${hour} · ${slice.energy}</p>
-  <div class="card">${fmt}</div>
-  <p class="footer">
-    Sent to your Auraspanse: ${email||'your account'}<br>
-    Your aura evolves as time moves through the 24-hour spectrum.<br><br>
-    <a href="/">← Read again</a>
-  </p>
-</div>
-</body>
+        <a href="/">← Read again</a>
+      </p>
+    </div>
+  </body>
 </html>`;
 }
 

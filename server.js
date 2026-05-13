@@ -1,5 +1,7 @@
 const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+const fetch = require('node-fetch');
+
 const app = express();
 
 app.use(express.json());
@@ -22,7 +24,7 @@ app.get('/', (req, res) => {
             border-radius: 10px; border: 1px solid #7c3aed;
             background: #1a0a2e; color: #e2d9f3; font-size: 1em;
           }
-          label { display: block; text-align: left; color: #a78bfa; 
+          label { display: block; text-align: left; color: #a78bfa;
                   font-size: 0.9em; margin-top: 10px; }
           .price-box { margin: 20px 0; }
           .price { text-decoration: line-through; color: #888; }
@@ -41,8 +43,10 @@ app.get('/', (req, res) => {
         <form onsubmit="buyReading(event)">
           <label>Your Name</label>
           <input type="text" id="name" placeholder="First name" required />
+
           <label>Date of Birth</label>
           <input type="date" id="dob" required />
+
           <label>How are you feeling today?</label>
           <select id="mood">
             <option value="calm">Calm & peaceful</option>
@@ -52,6 +56,7 @@ app.get('/', (req, res) => {
             <option value="confused">Lost or confused</option>
             <option value="happy">Happy & grateful</option>
           </select>
+
           <label>What do you need most right now?</label>
           <select id="need">
             <option value="clarity">Clarity & direction</option>
@@ -60,12 +65,16 @@ app.get('/', (req, res) => {
             <option value="confidence">Confidence & strength</option>
             <option value="abundance">Abundance & growth</option>
           </select>
+
           <div class="price-box">
-            <span class="price">Usually $12</span><br>
+            <span class="price">Usually $12</span>  
+
             <span class="sale">Intro offer: $1</span>
           </div>
+
           <button type="submit">Reveal My Aura →</button>
         </form>
+
         <script>
           async function buyReading(e) {
             e.preventDefault();
@@ -95,6 +104,7 @@ app.get('/', (req, res) => {
 app.post('/create-payment', async (req, res) => {
   try {
     const { name, dob, mood, need } = req.body;
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -104,7 +114,7 @@ app.post('/create-payment', async (req, res) => {
             name: 'Full Aura Blend Reading',
             description: 'Your complete aura color profile & energy reading — usually $12'
           },
-          unit_amount: 100,
+          unit_amount: 100, // $1.00
         },
         quantity: 1,
       }],
@@ -113,9 +123,10 @@ app.post('/create-payment', async (req, res) => {
       success_url: 'https://realtime-aurascope.onrender.com/success?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://realtime-aurascope.onrender.com',
     });
+
     res.json({ url: session.url });
   } catch (err) {
-    console.error(err);
+    console.error('Error creating checkout session:', err);
     res.status(500).json({ error: 'Payment failed to initialize' });
   }
 });
@@ -123,10 +134,12 @@ app.post('/create-payment', async (req, res) => {
 // Success page — generate aura reading
 app.get('/success', async (req, res) => {
   try {
-    const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
-    const { name, dob, mood, need } = session.metadata;
+    const sessionId = req.query.session_id;
+    if (!sessionId) throw new Error('Missing session_id');
 
-    // Generate aura reading with Claude
+    const session = await stripe.checkout.sessions.retrieve(sessionId);
+    const { name, dob, mood, need } = session.metadata || {};
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -135,8 +148,8 @@ app.get('/success', async (req, res) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 800,
         messages: [{
           role: 'user',
           content: `You are a gifted aura reader. Generate a warm, detailed, and personal aura reading for:
@@ -159,7 +172,11 @@ Write in a warm, mystical but grounded tone. Use emojis sparingly. Make it feel 
     });
 
     const ai = await response.json();
-    const reading = ai.content[0].text;
+
+    const reading =
+      ai && ai.content && ai.content[0] && ai.content[0].text
+        ? ai.content[0].text
+        : 'We had trouble generating your reading. Please contact support.';
 
     res.send(`
       <html>
@@ -170,7 +187,7 @@ Write in a warm, mystical but grounded tone. Use emojis sparingly. Make it feel 
                    margin: 0 auto; background: #0a0a1a; color: #e2d9f3; }
             h1 { color: #c084fc; text-align: center; font-size: 2em; }
             .name { text-align: center; color: #a78bfa; margin-bottom: 30px; }
-            .reading { 
+            .reading {
               background: #1a0a2e; border-radius: 16px; padding: 30px;
               line-height: 1.8; white-space: pre-wrap; border: 1px solid #7c3aed;
             }
@@ -180,17 +197,19 @@ Write in a warm, mystical but grounded tone. Use emojis sparingly. Make it feel 
         </head>
         <body>
           <h1>✨ Your Aura Reading</h1>
-          <p class="name">Prepared for ${name}</p>
+          <p class="name">Prepared for ${name || 'you'}</p>
           <div class="reading">${reading}</div>
           <p class="footer">
-            Want to save this? Screenshot or copy it now.<br><br>
+            Want to save this? Screenshot or copy it now.  
+  
+
             <a href="/">← Get another reading</a>
           </p>
         </body>
       </html>
     `);
   } catch (err) {
-    console.error(err);
+    console.error('Error on /success:', err);
     res.send(`
       <html><body style="background:#0a0a1a;color:#c084fc;text-align:center;padding:50px;font-family:sans-serif;">
         <h1>Something went wrong ✨</h1>
@@ -201,6 +220,3 @@ Write in a warm, mystical but grounded tone. Use emojis sparingly. Make it feel 
     `);
   }
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

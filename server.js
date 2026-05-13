@@ -4,43 +4,84 @@ const app = express();
 
 app.use(express.json());
 
-// Homepage with buy button
+// Homepage with form + buy button
 app.get('/', (req, res) => {
   res.send(`
     <html>
       <head>
         <title>Real-Time Digital Aurascope</title>
         <style>
-          body { font-family: sans-serif; text-align: center; padding: 50px; 
-                 background: #0a0a1a; color: #c084fc; }
-          h1 { font-size: 2.5em; margin-bottom: 10px; }
-          p { color: #e2d9f3; font-size: 1.1em; }
+          * { box-sizing: border-box; }
+          body { font-family: sans-serif; text-align: center; padding: 40px 20px;
+                 background: #0a0a1a; color: #c084fc; margin: 0; }
+          h1 { font-size: 2.2em; margin-bottom: 8px; }
+          .sub { color: #e2d9f3; font-size: 1em; margin-bottom: 30px; }
+          form { max-width: 420px; margin: 0 auto; }
+          input, select {
+            width: 100%; padding: 12px; margin: 8px 0;
+            border-radius: 10px; border: 1px solid #7c3aed;
+            background: #1a0a2e; color: #e2d9f3; font-size: 1em;
+          }
+          label { display: block; text-align: left; color: #a78bfa; 
+                  font-size: 0.9em; margin-top: 10px; }
+          .price-box { margin: 20px 0; }
           .price { text-decoration: line-through; color: #888; }
           .sale { color: #f0abfc; font-size: 1.4em; font-weight: bold; }
           button {
-            margin-top: 30px;
-            padding: 16px 40px;
-            background: #7c3aed;
-            color: white;
-            border: none;
-            border-radius: 12px;
-            font-size: 1.2em;
-            cursor: pointer;
+            width: 100%; margin-top: 20px; padding: 16px;
+            background: #7c3aed; color: white; border: none;
+            border-radius: 12px; font-size: 1.1em; cursor: pointer;
           }
           button:hover { background: #6d28d9; }
         </style>
       </head>
       <body>
         <h1>✨ Real-Time Digital Aurascope</h1>
-        <p>Discover your full aura blend — colors, energy layers, and what they mean for you.</p>
-        <br>
-        <span class="price">Usually $12</span><br>
-        <span class="sale">Today only: $1</span>
-        <br>
-        <button onclick="buyReading()">Get My Aura Reading →</button>
+        <p class="sub">Your full aura blend — colors, energy layers & what they mean for you right now.</p>
+        <form onsubmit="buyReading(event)">
+          <label>Your Name</label>
+          <input type="text" id="name" placeholder="First name" required />
+          <label>Date of Birth</label>
+          <input type="date" id="dob" required />
+          <label>How are you feeling today?</label>
+          <select id="mood">
+            <option value="calm">Calm & peaceful</option>
+            <option value="anxious">Anxious or stressed</option>
+            <option value="energized">Energized & motivated</option>
+            <option value="sad">Low or sad</option>
+            <option value="confused">Lost or confused</option>
+            <option value="happy">Happy & grateful</option>
+          </select>
+          <label>What do you need most right now?</label>
+          <select id="need">
+            <option value="clarity">Clarity & direction</option>
+            <option value="love">Love & connection</option>
+            <option value="healing">Healing & rest</option>
+            <option value="confidence">Confidence & strength</option>
+            <option value="abundance">Abundance & growth</option>
+          </select>
+          <div class="price-box">
+            <span class="price">Usually $12</span><br>
+            <span class="sale">Intro offer: $1</span>
+          </div>
+          <button type="submit">Reveal My Aura →</button>
+        </form>
         <script>
-          async function buyReading() {
-            const res = await fetch('/create-payment', { method: 'POST' });
+          async function buyReading(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            btn.textContent = 'Preparing your reading...';
+            btn.disabled = true;
+            const res = await fetch('/create-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                name: document.getElementById('name').value,
+                dob: document.getElementById('dob').value,
+                mood: document.getElementById('mood').value,
+                need: document.getElementById('need').value,
+              })
+            });
             const data = await res.json();
             window.location.href = data.url;
           }
@@ -50,9 +91,10 @@ app.get('/', (req, res) => {
   `);
 });
 
-// Stripe checkout
+// Create Stripe checkout, store user info in metadata
 app.post('/create-payment', async (req, res) => {
   try {
+    const { name, dob, mood, need } = req.body;
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -60,14 +102,15 @@ app.post('/create-payment', async (req, res) => {
           currency: 'usd',
           product_data: {
             name: 'Full Aura Blend Reading',
-            description: 'Your complete aura color profile, energy layers & meaning — usually $12'
+            description: 'Your complete aura color profile & energy reading — usually $12'
           },
-          unit_amount: 100, // $1.00
+          unit_amount: 100,
         },
         quantity: 1,
       }],
       mode: 'payment',
-      success_url: 'https://realtime-aurascope.onrender.com/success',
+      metadata: { name, dob, mood, need },
+      success_url: 'https://realtime-aurascope.onrender.com/success?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://realtime-aurascope.onrender.com',
     });
     res.json({ url: session.url });
@@ -77,19 +120,86 @@ app.post('/create-payment', async (req, res) => {
   }
 });
 
-// Success page
-app.get('/success', (req, res) => {
-  res.send(`
-    <html>
-      <head><title>Payment Successful</title></head>
-      <body style="font-family: sans-serif; text-align: center; padding: 50px; 
-                   background: #0a0a1a; color: #c084fc;">
-        <h1>✨ Thank You!</h1>
-        <p style="color: #e2d9f3;">Your aura reading is being prepared.<br>
-        Check your email shortly.</p>
-      </body>
-    </html>
-  `);
+// Success page — generate aura reading
+app.get('/success', async (req, res) => {
+  try {
+    const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
+    const { name, dob, mood, need } = session.metadata;
+
+    // Generate aura reading with Claude
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: `You are a gifted aura reader. Generate a warm, detailed, and personal aura reading for:
+Name: ${name}
+Date of Birth: ${dob}
+Current mood: ${mood}
+What they need most: ${need}
+
+Include:
+1. Their PRIMARY aura color and what it means right now
+2. Their SECONDARY aura color and its influence
+3. A third HIDDEN layer color that surprises them
+4. What their aura blend says about their energy this week
+5. A personal message just for them based on their mood and need
+6. One action they can take today to align their energy
+
+Write in a warm, mystical but grounded tone. Use emojis sparingly. Make it feel personal and specific to them, not generic.`
+        }]
+      })
+    });
+
+    const ai = await response.json();
+    const reading = ai.content[0].text;
+
+    res.send(`
+      <html>
+        <head>
+          <title>Your Aura Reading ✨</title>
+          <style>
+            body { font-family: sans-serif; padding: 40px 20px; max-width: 680px;
+                   margin: 0 auto; background: #0a0a1a; color: #e2d9f3; }
+            h1 { color: #c084fc; text-align: center; font-size: 2em; }
+            .name { text-align: center; color: #a78bfa; margin-bottom: 30px; }
+            .reading { 
+              background: #1a0a2e; border-radius: 16px; padding: 30px;
+              line-height: 1.8; white-space: pre-wrap; border: 1px solid #7c3aed;
+            }
+            .footer { text-align: center; margin-top: 30px; color: #888; font-size: 0.9em; }
+            a { color: #c084fc; }
+          </style>
+        </head>
+        <body>
+          <h1>✨ Your Aura Reading</h1>
+          <p class="name">Prepared for ${name}</p>
+          <div class="reading">${reading}</div>
+          <p class="footer">
+            Want to save this? Screenshot or copy it now.<br><br>
+            <a href="/">← Get another reading</a>
+          </p>
+        </body>
+      </html>
+    `);
+  } catch (err) {
+    console.error(err);
+    res.send(`
+      <html><body style="background:#0a0a1a;color:#c084fc;text-align:center;padding:50px;font-family:sans-serif;">
+        <h1>Something went wrong ✨</h1>
+        <p>Your payment was received but we hit an error generating your reading.</p>
+        <p>Email us and we'll sort it out right away.</p>
+        <a href="/" style="color:#c084fc;">← Go back</a>
+      </body></html>
+    `);
+  }
 });
 
 const PORT = process.env.PORT || 3000;

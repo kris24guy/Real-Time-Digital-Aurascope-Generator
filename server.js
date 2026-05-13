@@ -1,7 +1,5 @@
 const express = require('express');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const fetch = require('node-fetch');
-
 const app = express();
 
 app.use(express.json());
@@ -63,8 +61,7 @@ app.get('/', (req, res) => {
             <option value="abundance">Abundance & growth</option>
           </select>
           <div class="price-box">
-            <span class="price">Usually $12</span>  
-
+            <span class="price">Usually $12</span><br>
             <span class="sale">Intro offer: $1</span>
           </div>
           <button type="submit">Reveal My Aura →</button>
@@ -98,7 +95,6 @@ app.get('/', (req, res) => {
 app.post('/create-payment', async (req, res) => {
   try {
     const { name, dob, mood, need } = req.body;
-
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [{
@@ -108,7 +104,7 @@ app.post('/create-payment', async (req, res) => {
             name: 'Full Aura Blend Reading',
             description: 'Your complete aura color profile & energy reading — usually $12'
           },
-          unit_amount: 100, // $1.00
+          unit_amount: 100,
         },
         quantity: 1,
       }],
@@ -117,10 +113,9 @@ app.post('/create-payment', async (req, res) => {
       success_url: 'https://realtime-aurascope.onrender.com/success?session_id={CHECKOUT_SESSION_ID}',
       cancel_url: 'https://realtime-aurascope.onrender.com',
     });
-
     res.json({ url: session.url });
   } catch (err) {
-    console.error('Error creating checkout session:', err);
+    console.error(err);
     res.status(500).json({ error: 'Payment failed to initialize' });
   }
 });
@@ -128,13 +123,10 @@ app.post('/create-payment', async (req, res) => {
 // Success page — generate aura reading
 app.get('/success', async (req, res) => {
   try {
-    const sessionId = req.query.session_id;
-    if (!sessionId) throw new Error('Missing session_id');
+    const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
+    const { name, dob, mood, need } = session.metadata;
 
-    const session = await stripe.checkout.sessions.retrieve(sessionId);
-    const { name, dob, mood, need } = session.metadata || {};
-
-    // Generate aura reading with Anthropic
+    // Generate aura reading with Claude
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -143,8 +135,8 @@ app.get('/success', async (req, res) => {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
-        max_tokens: 800,
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
         messages: [{
           role: 'user',
           content: `You are a gifted aura reader. Generate a warm, detailed, and personal aura reading for:
@@ -167,11 +159,7 @@ Write in a warm, mystical but grounded tone. Use emojis sparingly. Make it feel 
     });
 
     const ai = await response.json();
-
-    const reading =
-      ai && ai.content && ai.content[0] && ai.content[0].text
-        ? ai.content[0].text
-        : 'We had trouble generating your reading. Please contact support.';
+    const reading = ai.content[0].text;
 
     res.send(`
       <html>
@@ -192,19 +180,17 @@ Write in a warm, mystical but grounded tone. Use emojis sparingly. Make it feel 
         </head>
         <body>
           <h1>✨ Your Aura Reading</h1>
-          <p class="name">Prepared for ${name || 'you'}</p>
+          <p class="name">Prepared for ${name}</p>
           <div class="reading">${reading}</div>
           <p class="footer">
-            Want to save this? Screenshot or copy it now.  
-  
-
+            Want to save this? Screenshot or copy it now.<br><br>
             <a href="/">← Get another reading</a>
           </p>
         </body>
       </html>
     `);
   } catch (err) {
-    console.error('Error on /success:', err);
+    console.error(err);
     res.send(`
       <html><body style="background:#0a0a1a;color:#c084fc;text-align:center;padding:50px;font-family:sans-serif;">
         <h1>Something went wrong ✨</h1>

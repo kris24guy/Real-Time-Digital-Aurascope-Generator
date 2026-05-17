@@ -6,6 +6,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.28.1",
     "resend": "^3.2.0",
     "express": "^4.19.2",
     "stripe": "^14.0.0",

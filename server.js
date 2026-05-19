@@ -1,373 +1,774 @@
-// ==========================================================
-// AURASPENSE — server.js
-// Backend for $1 Aura Reading SaaS
-// ==========================================================
-//
-// REQUIRED ENV VARIABLES:
-//
-// STRIPE_SECRET_KEY=sk_live_xxx
-// STRIPE_PRICE_ID=price_xxx
-// STRIPE_WEBHOOK_SECRET=whsec_xxx
-// RESEND_API_KEY=re_xxx
-// DOMAIN=https://yourdomain.com
-//
-// ==========================================================
-
 'use strict';
+
+/*
+╔════════════════════════════════════════════════════════════╗
+║                    AURASPANSE SERVER                      ║
+║         Production Upgrade / Stripe + Claude             ║
+╚════════════════════════════════════════════════════════════╝
+
+NEW FEATURES:
+✓ Rate limiting
+✓ Stripe automatic payment methods
+✓ Stripe webhook fulfillment
+✓ Persistent reading storage
+✓ Rare aura system
+✓ Daily temporal drift
+✓ Expanded coordinate system
+✓ Better AI prompting
+✓ Safer architecture
+✓ Cached fulfillment flow
+✓ Reading retrieval
+✓ Better health checks
+
+ENV REQUIRED:
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+ANTHROPIC_API_KEY=
+RESEND_API_KEY=
+PRICE_ID=
+BASE_URL=
+FROM_EMAIL=
+*/
 
 const express = require('express');
 const Stripe = require('stripe');
-const { Resend } = require('resend');
+const fetch = require('node-fetch');
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const rateLimit = require('express-rate-limit');
+const { Resend } = require('resend');
 
 const app = express();
 
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-const DOMAIN = process.env.DOMAIN || 'http://localhost:3000';
-
-app.use(express.json());
-
-
-// ==========================================================
-// SIMPLE AURA ENGINE
-// ==========================================================
-
-const auraColors = [
-  'Crimson Flame',
-  'Ocean Mist',
-  'Solar Gold',
-  'Emerald Pulse',
-  'Violet Echo',
-  'Shadow Indigo',
-  'Rose Quartz',
-  'Electric Cyan',
-  'Amber Drift',
-  'Obsidian Veil',
-  'Celestial Blue',
-  'Lunar Silver'
+const REQUIRED = [
+  'STRIPE_SECRET_KEY',
+  'STRIPE_WEBHOOK_SECRET',
+  'ANTHROPIC_API_KEY',
+  'RESEND_API_KEY',
+  'PRICE_ID',
 ];
 
-const traits = {
-  Aries: {
-    positive: 'fearless',
-    neutral: 'independent',
-    negative: 'impulsive'
-  },
-  Taurus: {
-    positive: 'grounded',
-    neutral: 'steady',
-    negative: 'stubborn'
-  },
-  Gemini: {
-    positive: 'adaptive',
-    neutral: 'curious',
-    negative: 'restless'
-  },
-  Cancer: {
-    positive: 'protective',
-    neutral: 'sensitive',
-    negative: 'guarded'
-  },
-  Leo: {
-    positive: 'radiant',
-    neutral: 'confident',
-    negative: 'prideful'
-  },
-  Virgo: {
-    positive: 'precise',
-    neutral: 'analytical',
-    negative: 'critical'
-  },
-  Libra: {
-    positive: 'balanced',
-    neutral: 'social',
-    negative: 'indecisive'
-  },
-  Scorpio: {
-    positive: 'intense',
-    neutral: 'private',
-    negative: 'obsessive'
-  },
-  Sagittarius: {
-    positive: 'adventurous',
-    neutral: 'philosophical',
-    negative: 'reckless'
-  },
-  Capricorn: {
-    positive: 'disciplined',
-    neutral: 'reserved',
-    negative: 'cold'
-  },
-  Aquarius: {
-    positive: 'visionary',
-    neutral: 'detached',
-    negative: 'rebellious'
-  },
-  Pisces: {
-    positive: 'empathetic',
-    neutral: 'dreamy',
-    negative: 'escapist'
-  }
-};
+const missing = REQUIRED.filter(k => !process.env[k]);
 
-
-// ==========================================================
-// GET ZODIAC SIGN
-// ==========================================================
-
-function getZodiac(month, day) {
-
-  if ((month == 1 && day >= 20) || (month == 2 && day <= 18)) return 'Aquarius';
-  if ((month == 2 && day >= 19) || (month == 3 && day <= 20)) return 'Pisces';
-  if ((month == 3 && day >= 21) || (month == 4 && day <= 19)) return 'Aries';
-  if ((month == 4 && day >= 20) || (month == 5 && day <= 20)) return 'Taurus';
-  if ((month == 5 && day >= 21) || (month == 6 && day <= 20)) return 'Gemini';
-  if ((month == 6 && day >= 21) || (month == 7 && day <= 22)) return 'Cancer';
-  if ((month == 7 && day >= 23) || (month == 8 && day <= 22)) return 'Leo';
-  if ((month == 8 && day >= 23) || (month == 9 && day <= 22)) return 'Virgo';
-  if ((month == 9 && day >= 23) || (month == 10 && day <= 22)) return 'Libra';
-  if ((month == 10 && day >= 23) || (month == 11 && day <= 21)) return 'Scorpio';
-  if ((month == 11 && day >= 22) || (month == 12 && day <= 21)) return 'Sagittarius';
-
-  return 'Capricorn';
+if (missing.length) {
+  console.error('❌ Missing env:', missing.join(', '));
+  process.exit(1);
 }
 
+/* ──────────────────────────────────────────────────────────
+   BODY PARSING
+────────────────────────────────────────────────────────── */
 
-// ==========================================================
-// GENERATE AURA
-// ==========================================================
+app.use('/stripe-webhook', express.raw({ type: 'application/json' }));
 
-function generateAura(birthdate) {
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
 
-  const date = new Date(birthdate);
+/* ──────────────────────────────────────────────────────────
+   RATE LIMITING
+────────────────────────────────────────────────────────── */
 
-  const month = date.getMonth() + 1;
-  const day = date.getDate();
+const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many attempts. Please wait.' },
+});
 
-  const zodiac = getZodiac(month, day);
+app.use('/create-payment', paymentLimiter);
 
-  const hash = crypto
+/* ──────────────────────────────────────────────────────────
+   STORAGE
+────────────────────────────────────────────────────────── */
+
+const DATA_DIR = path.join(__dirname, 'data');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR);
+}
+
+const READINGS_DB = path.join(DATA_DIR, 'readings.json');
+
+if (!fs.existsSync(READINGS_DB)) {
+  fs.writeFileSync(READINGS_DB, JSON.stringify([]));
+}
+
+function loadReadings() {
+  return JSON.parse(fs.readFileSync(READINGS_DB, 'utf8'));
+}
+
+function saveReading(data) {
+  const db = loadReadings();
+  db.push(data);
+  fs.writeFileSync(READINGS_DB, JSON.stringify(db, null, 2));
+}
+
+function findReadingBySession(id) {
+  return loadReadings().find(r => r.sessionId === id);
+}
+
+/* ──────────────────────────────────────────────────────────
+   UTILITIES
+────────────────────────────────────────────────────────── */
+
+function h2r(h) {
+  return [
+    parseInt(h.slice(1,3),16),
+    parseInt(h.slice(3,5),16),
+    parseInt(h.slice(5,7),16),
+  ];
+}
+
+function r2h(rgb) {
+  return '#'+rgb.map(v =>
+    Math.round(v).toString(16).padStart(2,'0')
+  ).join('');
+}
+
+function blend(a,b,t=.5){
+  const [r1,g1,b1]=h2r(a);
+  const [r2,g2,b2]=h2r(b);
+
+  return r2h([
+    r1+(r2-r1)*t,
+    g1+(g2-g1)*t,
+    b1+(b2-b1)*t,
+  ]);
+}
+
+function hash(str){
+  return crypto
     .createHash('sha256')
-    .update(birthdate + new Date().toDateString())
+    .update(str)
     .digest('hex');
+}
 
-  const color1 = auraColors[parseInt(hash.slice(0, 2), 16) % auraColors.length];
-  const color2 = auraColors[parseInt(hash.slice(2, 4), 16) % auraColors.length];
-  const color3 = auraColors[parseInt(hash.slice(4, 6), 16) % auraColors.length];
+/* ──────────────────────────────────────────────────────────
+   CORE SYSTEMS
+────────────────────────────────────────────────────────── */
+
+const RARITIES = [
+  { name:'Common', chance:.78 },
+  { name:'Rare', chance:.17 },
+  { name:'Mythic', chance:.04 },
+  { name:'Singular', chance:.01 },
+];
+
+function rollRarity(seed){
+  const n = parseInt(hash(seed).slice(0,8),16)/0xffffffff;
+
+  let cumulative = 0;
+
+  for(const r of RARITIES){
+    cumulative += r.chance;
+    if(n <= cumulative) return r.name;
+  }
+
+  return 'Common';
+}
+
+const SPECIAL_TITLES = {
+  Rare:[
+    'Ghost Current',
+    'Veil Bloom',
+    'Silver Hollow',
+  ],
+
+  Mythic:[
+    'Solar Rift',
+    'Null Bloom',
+    'Mirror Frequency',
+  ],
+
+  Singular:[
+    'The Quiet Divide',
+    'Blackwater Crown',
+    'Veilborne',
+  ],
+};
+
+function pickRareTitle(rarity, seed){
+  const arr = SPECIAL_TITLES[rarity];
+
+  if(!arr) return null;
+
+  const idx = parseInt(hash(seed).slice(0,4),16)%arr.length;
+
+  return arr[idx];
+}
+
+/* ──────────────────────────────────────────────────────────
+   COLOR LIBRARY
+────────────────────────────────────────────────────────── */
+
+const AURA_LIBRARY = [
+  {
+    id:'null-rift',
+    name:'Null Rift',
+    hex:'#35263f',
+    emotion:'detached transformation',
+    polarity:'shadow',
+  },
+
+  {
+    id:'drift-bloom',
+    name:'Drift Bloom',
+    hex:'#7ab8c9',
+    emotion:'emotional expansion',
+    polarity:'light',
+  },
+
+  {
+    id:'ember-veil',
+    name:'Ember Veil',
+    hex:'#d46b4a',
+    emotion:'warm concealment',
+    polarity:'balanced',
+  },
+
+  {
+    id:'ghost-current',
+    name:'Ghost Current',
+    hex:'#7a89d0',
+    emotion:'silent movement',
+    polarity:'rare',
+  },
+];
+
+function nearestAura(hex){
+
+  let winner = null;
+  let best = Infinity;
+
+  const [r,g,b] = h2r(hex);
+
+  for(const aura of AURA_LIBRARY){
+
+    const [ar,ag,ab] = h2r(aura.hex);
+
+    const dist =
+      Math.abs(r-ar)+
+      Math.abs(g-ag)+
+      Math.abs(b-ab);
+
+    if(dist < best){
+      best = dist;
+      winner = aura;
+    }
+  }
+
+  return winner;
+}
+
+/* ──────────────────────────────────────────────────────────
+   TEMPORAL DRIFT
+────────────────────────────────────────────────────────── */
+
+function temporalDrift(){
+
+  return (
+    Math.sin(Date.now()/86400000)*0.08
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+   HUE ENGINE
+────────────────────────────────────────────────────────── */
+
+function computeHues(payload){
+
+  const {
+    dob,
+    q1,
+    q2,
+    q3,
+  } = payload;
+
+  const d = new Date(dob);
+
+  const month = d.getMonth();
+
+  const base = [
+    '#FF5C48',
+    '#4CAF7D',
+    '#FFD966',
+    '#8FBBE0',
+    '#FF8C30',
+    '#6BCF6B',
+    '#F06DC0',
+    '#8B2252',
+    '#60C8F0',
+    '#4E9E7A',
+    '#50D0CC',
+    '#7870D0',
+  ][month];
+
+  const drift = temporalDrift();
+
+  const hue1 = blend(base,'#ffffff',0.18);
+
+  const hue2 = blend(base,'#000000',0.32);
+
+  const hue3 = blend(
+    hue1,
+    hue2,
+    .5 + drift
+  );
+
+  const rarity = rollRarity(
+    dob+q1+q2+q3
+  );
+
+  const rareTitle = pickRareTitle(
+    rarity,
+    dob
+  );
+
+  const nearest = nearestAura(hue3);
+
+  const finalName =
+    rareTitle ||
+    nearest.name;
 
   return {
-    zodiac,
-    traits: traits[zodiac],
-    colors: [color1, color2, color3],
-    summary: `
-Your aura is currently vibrating between ${color1}, ${color2}, and ${color3}.
-This emotional spectrum reflects a deeply ${traits[zodiac].positive} energy,
-balanced by ${traits[zodiac].neutral} tendencies while resisting
-${traits[zodiac].negative} distortions.
-`
+    hue1,
+    hue2,
+    hue3,
+    rarity,
+    aura:nearest,
+    finalName,
   };
 }
 
+/* ──────────────────────────────────────────────────────────
+   CLAUDE READING
+────────────────────────────────────────────────────────── */
 
-// ==========================================================
-// PREVIEW ROUTE
-// ==========================================================
+async function generateReading(data){
 
-app.post('/preview', async (req, res) => {
+  const prompt = `
+You are Auraspanse.
 
-  try {
+Write in slow, restrained,
+high-literary mystical language.
 
-    const { birthdate } = req.body;
+Avoid:
+- "your soul"
+- "your energy"
+- "journey"
+- generic spirituality
 
-    if (!birthdate) {
+Prefer:
+- weather
+- geology
+- architecture
+- tidal movement
+- ancient material
+
+Coordinates:
+
+Aura Name: ${data.finalName}
+Rarity: ${data.rarity}
+Emotion: ${data.aura.emotion}
+Polarity: ${data.aura.polarity}
+
+Questions:
+Q1: ${data.q1}
+Q2: ${data.q2}
+Q3: ${data.q3}
+
+Write exactly 5 paragraphs.
+
+Use bold sparingly.
+`;
+
+  const aiRes = await fetch(
+    'https://api.anthropic.com/v1/messages',
+    {
+      method:'POST',
+
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':process.env.ANTHROPIC_API_KEY,
+        'anthropic-version':'2023-06-01',
+      },
+
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+
+        messages:[
+          {
+            role:'user',
+            content:prompt,
+          },
+        ],
+      }),
+    }
+  );
+
+  const json = await aiRes.json();
+
+  return (
+    json?.content?.[0]?.text ||
+    'Reading unavailable.'
+  );
+}
+
+/* ──────────────────────────────────────────────────────────
+   EMAIL DELIVERY
+────────────────────────────────────────────────────────── */
+
+async function sendReadingEmail(reading){
+
+  const html = `
+  <div style="
+    background:#07060f;
+    color:#e4dff0;
+    padding:48px;
+    font-family:sans-serif;
+  ">
+
+    <h1 style="
+      color:white;
+      font-weight:300;
+      letter-spacing:.18em;
+    ">
+      ${reading.finalName}
+    </h1>
+
+    <p style="
+      opacity:.5;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+      font-size:12px;
+    ">
+      ${reading.rarity}
+    </p>
+
+    <div style="
+      display:flex;
+      gap:12px;
+      margin:24px 0;
+    ">
+      ${[reading.hue1,reading.hue2,reading.hue3]
+        .map(c=>`
+          <div style="
+            width:44px;
+            height:44px;
+            border-radius:50%;
+            background:${c};
+          "></div>
+        `).join('')}
+    </div>
+
+    <div style="
+      line-height:2;
+      opacity:.82;
+      font-size:15px;
+    ">
+      ${reading.text.replace(/\n/g,'<br><br>')}
+    </div>
+
+  </div>
+  `;
+
+  await resend.emails.send({
+
+    from:
+      process.env.FROM_EMAIL ||
+      'Auraspanse <reading@auraspanse.com>',
+
+    to:reading.email,
+
+    subject:`${reading.finalName} — Your Auraspanse Reading`,
+
+    html,
+  });
+}
+
+/* ──────────────────────────────────────────────────────────
+   ROUTES
+────────────────────────────────────────────────────────── */
+
+app.get('/', (req,res)=>{
+
+  res.send(`
+    <h1>Auraspanse</h1>
+    <p>Server online.</p>
+  `);
+
+});
+
+/* ──────────────────────────────────────────────────────────
+   CREATE PAYMENT
+────────────────────────────────────────────────────────── */
+
+app.post('/create-payment', async(req,res)=>{
+
+  try{
+
+    const {
+      email,
+      dob,
+      q1,
+      q2,
+      q3,
+    } = req.body;
+
+    if(!email || !dob){
+
       return res.status(400).json({
-        error: 'Birthdate required'
+        error:'Missing required fields.',
       });
     }
 
-    const aura = generateAura(birthdate);
+    const session =
+      await stripe.checkout.sessions.create({
+
+        mode:'payment',
+
+        customer_email:email,
+
+        automatic_payment_methods:{
+          enabled:true,
+        },
+
+        allow_promotion_codes:true,
+
+        line_items:[
+          {
+            price:process.env.PRICE_ID,
+            quantity:1,
+          },
+        ],
+
+        metadata:{
+          email,
+          dob,
+          q1,
+          q2,
+          q3,
+        },
+
+        success_url:
+          `${process.env.BASE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
+
+        cancel_url:
+          `${process.env.BASE_URL}/`,
+      });
 
     res.json({
-      success: true,
-      preview: {
-        zodiac: aura.zodiac,
-        colors: aura.colors,
-        teaser: aura.summary
-      }
+      url:session.url,
     });
 
-  } catch (err) {
+  }catch(err){
 
     console.error(err);
 
     res.status(500).json({
-      error: 'Preview failed'
+      error:'Payment creation failed.',
     });
   }
 });
 
+/* ──────────────────────────────────────────────────────────
+   STRIPE WEBHOOK
+────────────────────────────────────────────────────────── */
 
-// ==========================================================
-// CREATE STRIPE CHECKOUT
-// ==========================================================
+app.post('/stripe-webhook', async(req,res)=>{
 
-app.post('/create-checkout-session', async (req, res) => {
+  let event;
 
-  try {
+  try{
 
-    const { birthdate, email } = req.body;
+    event = stripe.webhooks.constructEvent(
+      req.body,
+      req.headers['stripe-signature'],
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
 
-    if (!birthdate || !email) {
-      return res.status(400).json({
-        error: 'Missing fields'
+  }catch(err){
+
+    console.error('Webhook verify failed:',err.message);
+
+    return res.sendStatus(400);
+  }
+
+  if(event.type === 'checkout.session.completed'){
+
+    const session = event.data.object;
+
+    try{
+
+      const {
+        email,
+        dob,
+        q1,
+        q2,
+        q3,
+      } = session.metadata;
+
+      const hues = computeHues({
+        dob,
+        q1,
+        q2,
+        q3,
       });
-    }
 
-    const session = await stripe.checkout.sessions.create({
-
-      payment_method_types: ['card'],
-
-      line_items: [
-        {
-          price: process.env.STRIPE_PRICE_ID,
-          quantity: 1
-        }
-      ],
-
-      mode: 'payment',
-
-      success_url: `${DOMAIN}/success`,
-      cancel_url: `${DOMAIN}/cancel`,
-
-      customer_email: email,
-
-      metadata: {
-        birthdate,
-        email
-      }
-    });
-
-    res.json({
-      url: session.url
-    });
-
-  } catch (err) {
-
-    console.error(err);
-
-    res.status(500).json({
-      error: 'Stripe session failed'
-    });
-  }
-});
-
-
-// ==========================================================
-// STRIPE WEBHOOK
-// ==========================================================
-
-app.post(
-  '/webhook',
-  express.raw({ type: 'application/json' }),
-  async (req, res) => {
-
-    let event;
-
-    try {
-
-      const sig = req.headers['stripe-signature'];
-
-      event = stripe.webhooks.constructEvent(
-        req.body,
-        sig,
-        process.env.STRIPE_WEBHOOK_SECRET
-      );
-
-    } catch (err) {
-
-      console.error(err);
-
-      return res.status(400).send(`Webhook Error: ${err.message}`);
-    }
-
-    if (event.type === 'checkout.session.completed') {
-
-      const session = event.data.object;
-
-      const email = session.metadata.email;
-      const birthdate = session.metadata.birthdate;
-
-      const aura = generateAura(birthdate);
-
-      try {
-
-        await resend.emails.send({
-
-          from: 'AuraSpense <onboarding@resend.dev>',
-
-          to: email,
-
-          subject: 'Your Full Aura Reading',
-
-          html: `
-            <div style="font-family:sans-serif;padding:20px;">
-              <h1>Your Aura Reading</h1>
-
-              <p><strong>Zodiac:</strong> ${aura.zodiac}</p>
-
-              <p>
-                <strong>Your Aura Colors:</strong><br/>
-                ${aura.colors.join(', ')}
-              </p>
-
-              <p>${aura.summary}</p>
-
-              <hr/>
-
-              <p>
-                Your emotional spectrum is constantly evolving through
-                layered energetic transitions.
-              </p>
-
-              <p>
-                Thank you for unlocking your AuraSpense profile.
-              </p>
-            </div>
-          `
+      const readingText =
+        await generateReading({
+          ...hues,
+          q1,
+          q2,
+          q3,
         });
 
-        console.log('Aura email sent');
+      const reading = {
 
-      } catch (err) {
+        sessionId:session.id,
 
-        console.error('Email failed:', err);
-      }
+        createdAt:new Date().toISOString(),
+
+        email,
+
+        dob,
+
+        q1,
+        q2,
+        q3,
+
+        ...hues,
+
+        text:readingText,
+      };
+
+      saveReading(reading);
+
+      await sendReadingEmail(reading);
+
+      console.log('✓ Fulfilled:',session.id);
+
+    }catch(err){
+
+      console.error(
+        'Fulfillment failed:',
+        err
+      );
     }
-
-    res.json({ received: true });
   }
-);
 
-
-// ==========================================================
-// HEALTH CHECK
-// ==========================================================
-
-app.get('/', (req, res) => {
-
-  res.send('AuraSpense backend running.');
+  res.json({ received:true });
 });
 
+/* ──────────────────────────────────────────────────────────
+   SUCCESS PAGE
+────────────────────────────────────────────────────────── */
 
-// ==========================================================
-// START SERVER
-// ==========================================================
+app.get('/success',(req,res)=>{
 
-const PORT = process.env.PORT || 3000;
+  const { session_id } = req.query;
 
-app.listen(PORT, () => {
+  const reading =
+    findReadingBySession(session_id);
 
-  console.log(`AuraSpense server running on port ${PORT}`);
+  if(!reading){
+
+    return res.send(`
+      <h2>
+        Your reading is still forming...
+      </h2>
+
+      <p>
+        Refresh in a few seconds.
+      </p>
+    `);
+  }
+
+  res.send(`
+  <html>
+  <body style="
+    background:#07060f;
+    color:#e4dff0;
+    font-family:sans-serif;
+    padding:48px;
+  ">
+
+    <h1 style="
+      font-weight:300;
+      letter-spacing:.18em;
+    ">
+      ${reading.finalName}
+    </h1>
+
+    <p style="
+      opacity:.45;
+      text-transform:uppercase;
+      letter-spacing:.12em;
+    ">
+      ${reading.rarity}
+    </p>
+
+    <div style="
+      display:flex;
+      gap:12px;
+      margin:28px 0;
+    ">
+      ${[reading.hue1,reading.hue2,reading.hue3]
+        .map(c=>`
+          <div style="
+            width:52px;
+            height:52px;
+            border-radius:50%;
+            background:${c};
+          "></div>
+        `).join('')}
+    </div>
+
+    <div style="
+      line-height:2;
+      max-width:700px;
+      opacity:.84;
+    ">
+      ${reading.text.replace(/\n/g,'<br><br>')}
+    </div>
+
+  </body>
+  </html>
+  `);
+});
+
+/* ──────────────────────────────────────────────────────────
+   HEALTH
+────────────────────────────────────────────────────────── */
+
+app.get('/health',(req,res)=>{
+
+  res.json({
+    ok:true,
+    timestamp:new Date().toISOString(),
+    uptime:process.uptime(),
+  });
+
+});
+
+/* ──────────────────────────────────────────────────────────
+   START
+────────────────────────────────────────────────────────── */
+
+const PORT =
+  process.env.PORT || 3000;
+
+app.listen(PORT,()=>{
+
+  console.log(`
+✦ Auraspanse online
+✦ Port ${PORT}
+✦ Environment ready
+`);
+
 });

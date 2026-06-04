@@ -1,10 +1,31 @@
 {
-  "name": "aurascope-server",
+  "name": "aurascope",
   "version": "1.0.0",
+  "description": "A real-time digital aura generator powered by Claude AI, blending chromotherapy, quantum frequency science, and sacred geometry",
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "aura",
+    "generator",
+    "claude-ai",
+    "chromotherapy",
+    "frequency",
+    "mystical",
+    "digital",
+    "oracle"
+  ],
+  "author": "Kris",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kris24guy/Real-Time-Digital-Aurascope-Generator.git"
+  },
+  "engines": {
+    "node": ">=14.0.0"
   },
   "dependencies": {
     "express": "^4.19.2"

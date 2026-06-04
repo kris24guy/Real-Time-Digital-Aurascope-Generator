@@ -1,11 +1,81 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 🌟 AURASCOPE: Real-Time Digital Aura Generator
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * A mystical web application that generates personalized aura readings
+ * by blending chromotherapy, quantum frequency science, and sacred geometry
+ * with Claude AI's creative interpretation.
+ *
+ * Features:
+ * - Real-time aura generation based on user names
+ * - Three cosmic sub-hues with unique frequencies (432, 528, 639 Hz)
+ * - Personalized aura essence and cosmic guidance
+ * - Sacred mantras tied to spiritual frequencies
+ * - Beautiful animated UI with glass-morphism and geometric elements
+ * - Email integration for sharing readings
+ *
+ * @author Kris
+ * @version 1.0.0
+ * @license MIT
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const express = require("express");
 const https = require("https");
 const app = express();
+
+// ────────────────────────────────────────────────────────────────────────────
+// MIDDLEWARE
+// ────────────────────────────────────────────────────────────────────────────
+
 app.use(express.json());
 
-// ── Anthropic API call using built-in https (no extra deps) ──────────────────
+// ────────────────────────────────────────────────────────────────────────────
+// CONFIGURATION
+// ────────────────────────────────────────────────────────────────────────────
+
+const PORT = process.env.PORT || 3000;
+const API_KEY = process.env.ANTHROPIC_API_KEY;
+
+if (!API_KEY) {
+  console.error("❌ Error: ANTHROPIC_API_KEY environment variable is not set");
+  console.error("Please set your API key: export ANTHROPIC_API_KEY=your-key");
+  process.exit(1);
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// CLAUDE API INTEGRATION
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Calls the Anthropic Claude API to generate an aura reading for a given name.
+ *
+ * The function:
+ * 1. Constructs a detailed prompt for aura generation
+ * 2. Sends it to Claude API with specific formatting requirements
+ * 3. Parses the JSON response with robust error handling
+ * 4. Returns structured aura data with three sub-hues and a signature aura
+ *
+ * @param {string} name - The person's name to generate an aura for
+ * @returns {Promise<Object>} Aura data with subHues, finalHue, aurascope, and mantra
+ *
+ * @example
+ * const aura = await callClaude("Alice");
+ * // Returns:
+ * // {
+ * //   subHues: [...],
+ * //   finalHue: {...},
+ * //   aurascope: "...",
+ * //   mantra: "..."
+ * // }
+ */
 function callClaude(name) {
   return new Promise((resolve, reject) => {
+    // ──────────────────────────────────────────────────────────────────────
+    // CONSTRUCT PROMPT FOR AURA GENERATION
+    // ──────────────────────────────────────────────────────────────────────
+    
     const prompt = `Generate a full living aura reading for ${name}.
 
 Return ONLY valid JSON — no markdown, no backticks, no extra text:
@@ -31,12 +101,32 @@ Return ONLY valid JSON — no markdown, no backticks, no extra text:
   "mantra": "exactly 8-12 words — a powerful sacred mantra for ${name}"
 }`;
 
+    // ──────────────────────────────────────────────────────────────────────
+    // CONSTRUCT REQUEST BODY FOR CLAUDE API
+    // ──────────────────────────────────────────────────────────────────────
+
+    const systemPrompt = `You are the Universe's Eternal Aura Oracle — a mystical intelligence versed in chromotherapy, synesthesia, sacred geometry, quantum frequency science, chakra systems, Ayurvedic doshas, and the ancient knowledge of light frequencies.
+
+Your role:
+1. Read the energy signature of a name through linguistic, numerological, and archetypal lenses
+2. Perceive three cosmic sub-frequencies that comprise their unique aura
+3. Channel personalized interpretations that weave color, emotion, frequency, and spiritual symbolism
+4. Generate insights that feel intimate, accurate, and spiritually resonant
+5. Craft a sacred mantra that serves as their spiritual anchor
+
+Be poetic yet precise. Be mystical yet grounded in actual frequency science, color psychology, and archetypal knowledge.
+Your readings should feel like ancient wisdom meeting quantum physics.`;
+
     const body = JSON.stringify({
       model: "claude-opus-4-5",
       max_tokens: 1800,
-      system: "You are the Universe's Eternal Aura Oracle — a mystical intelligence versed in chromotherapy, synesthesia, sacred geometry, quantum frequency science, chakra systems, Ayurvedic doshas, Chinese Five Elements, color psychology, Jungian archetypes, numerology, astrology, Kabbalah, Sufi traditions, and shamanic lineages. Your readings are poetic, intimate, and deeply personal.",
+      system: systemPrompt,
       messages: [{ role: "user", content: prompt }]
     });
+
+    // ──────────────────────────────────────────────────────────────────────
+    // CONFIGURE HTTPS REQUEST TO ANTHROPIC
+    // ──────────────────────────────────────────────────────────────────────
 
     const options = {
       hostname: "api.anthropic.com",
@@ -45,61 +135,157 @@ Return ONLY valid JSON — no markdown, no backticks, no extra text:
       headers: {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(body),
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
+        "x-api-key": API_KEY,
         "anthropic-version": "2023-06-01"
       }
     };
 
+    // ──────────────────────────────────────────────────────────────────────
+    // SEND REQUEST AND HANDLE RESPONSE
+    // ──────────────────────────────────────────────────────────────────────
+
     const req = https.request(options, (res) => {
       let data = "";
-      res.on("data", chunk => data += chunk);
+
+      // Accumulate response data
+      res.on("data", (chunk) => {
+        data += chunk;
+      });
+
+      // Process complete response
       res.on("end", () => {
         try {
+          // Parse API response
           const parsed = JSON.parse(data);
-          if (parsed.error) return reject(new Error(parsed.error.message));
-          const text = parsed.content.filter(b => b.type === "text").map(b => b.text).join("");
-          const clean = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+
+          // Check for API errors
+          if (parsed.error) {
+            return reject(new Error(`Claude API Error: ${parsed.error.message}`));
+          }
+
+          // Extract text content from Claude's response
+          const textContent = parsed.content
+            .filter((block) => block.type === "text")
+            .map((block) => block.text)
+            .join("");
+
+          // Remove markdown formatting if present
+          const cleanedText = textContent
+            .replace(/```json/gi, "")
+            .replace(/```/g, "")
+            .trim();
+
+          // Parse JSON from response
           let result;
           try {
-            result = JSON.parse(clean);
+            result = JSON.parse(cleanedText);
           } catch {
-            const match = clean.match(/\{[\s\S]*\}/);
-            if (match) result = JSON.parse(match[0]);
-            else throw new Error("Could not parse aura data");
+            // Fallback: try to extract JSON object if it's wrapped in text
+            const jsonMatch = cleanedText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              result = JSON.parse(jsonMatch[0]);
+            } else {
+              throw new Error("Could not extract valid JSON from Claude's response");
+            }
           }
+
+          // Validate response structure
+          if (!result.subHues || !result.finalHue || !result.aurascope || !result.mantra) {
+            throw new Error("Claude response missing required fields");
+          }
+
           resolve(result);
-        } catch (e) {
-          reject(e);
+        } catch (error) {
+          reject(new Error(`Failed to parse aura data: ${error.message}`));
         }
       });
     });
 
-    req.on("error", reject);
+    // Handle request errors
+    req.on("error", (error) => {
+      reject(new Error(`API request failed: ${error.message}`));
+    });
+
+    // Send request body
     req.write(body);
     req.end();
   });
 }
 
-// ── API route ────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+// API ROUTES
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/reading
+ *
+ * Generates an aura reading for a given name.
+ *
+ * Request body:
+ * {
+ *   "name": "The person's name"
+ * }
+ *
+ * Response:
+ * {
+ *   "subHues": [...],
+ *   "finalHue": {...},
+ *   "aurascope": "...",
+ *   "mantra": "..."
+ * }
+ *
+ * Error responses:
+ * 400: Missing name field
+ * 500: Claude API or parsing error
+ */
 app.post("/api/reading", async (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: "Name is required" });
   try {
-    const data = await callClaude(name);
+    const { name } = req.body;
+
+    // Validate input
+    if (!name || typeof name !== "string" || name.trim().length === 0) {
+      return res.status(400).json({
+        error: "Name is required and must be a non-empty string"
+      });
+    }
+
+    // Generate aura reading
+    const data = await callClaude(name.trim());
+
+    // Return aura data
     res.json(data);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Oracle connection failed. Please try again." });
+  } catch (error) {
+    console.error("❌ Aura generation error:", error.message);
+    res.status(500).json({
+      error: error.message || "Oracle connection failed. Please try again."
+    });
   }
 });
 
-// ── HTML ─────────────────────────────────────────────────────────────────────
+// ────────────────────────────────────────────────────────────────────────────
+// FRONTEND UI
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Embedded HTML/CSS/JavaScript for the Aurascope interface.
+ *
+ * The UI features:
+ * - Three screens: intro (input), scanning (progress), results (display)
+ * - Animated orbs representing aura colors
+ * - Responsive grid layout for sub-hue cards
+ * - Email functionality to send readings
+ * - Starfield background with geometric animations
+ * - Glass-morphism design with blur effects
+ *
+ * No external dependencies — all CSS and JavaScript are embedded
+ * for a fast, self-contained experience.
+ */
 const HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Aurascope</title>
+<title>Aurascope — Aura Reading Oracle</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@400;700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap"/>
 <style>
@@ -180,7 +366,7 @@ input:focus{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 3px rgba(139,92,24
 
 /* blocks */
 .aurascope-block{background:rgba(139,92,246,.06);border:1px solid rgba(139,92,246,.2);border-radius:18px;padding:clamp(24px,4vw,44px);max-width:760px;margin:0 auto 28px}
-.mantra-block{background:linear-gradient(135deg,rgba(176,136,56,.07),rgba(230,185,80,.04));border:1px solid rgba(176,136,56,.22);border-radius:12px;padding:20px 32px;max-width:600px;margin:0 auto 46px}
+.mantra-block{background:linear-gradient(135deg,rgba(176,136,56,.07),rgba(230,185,80,.04));border:1px solid rgba(176,136,56,.22);border-radius:12px;padding:20px 32px;max-width:600px;margin:0 auto}
 .eyebrow{font-family:'Cinzel',serif;font-size:.66rem;letter-spacing:.34em;color:rgba(180,150,255,.36);text-transform:uppercase;margin-bottom:12px}
 .divider{display:flex;align-items:center;gap:14px;margin:50px auto;max-width:520px;width:100%}
 .divider-line{flex:1;height:1px}
@@ -195,7 +381,6 @@ input:focus{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 3px rgba(139,92,24
 @keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes spinCW{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 @keyframes spinCCW{from{transform:rotate(0deg)}to{transform:rotate(-360deg)}}
-@keyframes hueShift{0%,100%{filter:hue-rotate(0deg)}50%{filter:hue-rotate(200deg)}}
 </style>
 </head>
 <body>
@@ -205,8 +390,7 @@ input:focus{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 3px rgba(139,92,24
 <div class="geo" style="top:4%;right:3%;width:180px;height:180px;animation:spinCW 44s linear infinite">
   <svg viewBox="0 0 200 200" fill="none" stroke="#a855f7" stroke-width=".6">
     <circle cx="100" cy="100" r="92"/><circle cx="100" cy="100" r="60"/><circle cx="100" cy="100" r="28"/>
-    <line x1="100" y1="8" x2="100" y2="192"/>
-    <line x1="100" y1="8" x2="100" y2="192" transform="rotate(60 100 100)"/>
+    <line x1="100" y1="8" x2="100" y2="192"/><line x1="100" y1="8" x2="100" y2="192" transform="rotate(60 100 100)"/>
     <line x1="100" y1="8" x2="100" y2="192" transform="rotate(120 100 100)"/>
     <polygon points="100,14 183,158 17,158"/><polygon points="100,186 17,42 183,42"/>
   </svg>
@@ -214,32 +398,31 @@ input:focus{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 3px rgba(139,92,24
 
 <div class="geo" style="bottom:8%;left:2%;width:110px;height:110px;animation:spinCCW 60s linear infinite">
   <svg viewBox="0 0 120 120" fill="none" stroke="#ec4899" stroke-width=".5">
-    <circle cx="60" cy="60" r="56"/>
-    <line x1="60" y1="4" x2="60" y2="116"/>
+    <circle cx="60" cy="60" r="56"/><line x1="60" y1="4" x2="60" y2="116"/>
     <line x1="60" y1="4" x2="60" y2="116" transform="rotate(45 60 60)"/>
     <line x1="60" y1="4" x2="60" y2="116" transform="rotate(90 60 60)"/>
     <line x1="60" y1="4" x2="60" y2="116" transform="rotate(135 60 60)"/>
   </svg>
 </div>
 
-<!-- INTRO -->
+<!-- INTRO SCREEN -->
 <div id="screen-intro" class="screen">
   <div style="animation:floatY 4.5s ease-in-out infinite;margin-bottom:38px">
     <div class="orb-wrap" style="width:168px;height:168px">
       <div class="ring" style="inset:-17px;border-color:rgba(168,85,247,.38);animation:ringOut 2.2s 0s ease-out infinite"></div>
       <div class="ring" style="inset:-34px;border-color:rgba(168,85,247,.26);animation:ringOut 2.8s .9s ease-out infinite"></div>
       <div class="ring" style="inset:-51px;border-color:rgba(168,85,247,.14);border-style:dashed;animation:ringOut 3.4s 1.8s ease-out infinite"></div>
-      <div class="orb" style="background:conic-gradient(from 0deg,#5b21b6,#8b5cf6,#c026d3,#f59e0b,#10b981,#06b6d4,#3b82f6,#5b21b6);box-shadow:0 0 70px rgba(139,92,246,.55),0 0 140px rgba(139,92,246,.22);filter:blur(1.2px);animation:breathe 3.5s ease-in-out infinite,hueShift 14s ease-in-out infinite"></div>
+      <div class="orb" style="background:conic-gradient(from 0deg,#5b21b6,#8b5cf6,#c026d3,#f59e0b,#10b981,#06b6d4,#3b82f6,#5b21b6);box-shadow:0 0 70px rgba(139,92,246,.55),0 0 140px rgba(139,92,246,.25)"></div>
       <div class="orb-shine"></div>
     </div>
   </div>
 
   <h1 class="gold" style="font-family:'Cinzel Decorative',serif;font-size:clamp(2.2rem,7vw,4.2rem);letter-spacing:.14em;margin-bottom:8px">AURASCOPE</h1>
-  <p style="font-family:'Cinzel',serif;font-size:clamp(.62rem,1.8vw,.8rem);letter-spacing:.28em;color:rgba(180,150,255,.35);text-transform:uppercase;margin-bottom:32px">A living reading of your electromagnetic soul signature</p>
+  <p style="font-family:'Cinzel',serif;font-size:clamp(.62rem,1.8vw,.8rem);letter-spacing:.28em;color:rgba(180,150,255,.35);text-transform:uppercase;margin-bottom:32px">A living reading of your essence</p>
 
   <div style="display:flex;align-items:center;gap:12px;width:100%;max-width:440px;margin-bottom:34px">
     <div style="flex:1;height:1px;background:linear-gradient(to right,transparent,rgba(139,92,246,.4))"></div>
-    <span style="color:rgba(139,92,246,.5)">&#10022;</span>
+    <span style="color:rgba(139,92,246,.5)">✦</span>
     <div style="flex:1;height:1px;background:linear-gradient(to left,transparent,rgba(139,92,246,.4))"></div>
   </div>
 
@@ -257,18 +440,18 @@ input:focus{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 3px rgba(139,92,24
   </div>
 
   <p style="margin-top:46px;font-size:.76rem;font-style:italic;color:rgba(180,150,255,.18);max-width:380px;letter-spacing:.05em">
-    Channeled from chromotherapy, quantum frequency science, chakra wisdom &amp; the ancient knowledge of light
+    Channeled from chromotherapy, quantum frequency science, chakra wisdom & the ancient knowledge of light
   </p>
 </div>
 
-<!-- SCANNING -->
+<!-- SCANNING SCREEN -->
 <div id="screen-scan" class="screen hidden">
   <div style="position:relative;width:260px;height:260px;margin-bottom:50px">
     <div class="ring" style="inset:-26px;border-color:rgba(168,85,247,.52);border-width:1.5px;animation:spinCW 10s linear infinite;opacity:1"></div>
     <div class="ring" style="inset:-52px;border-color:rgba(168,85,247,.3);border-style:dashed;animation:spinCCW 16s linear infinite;opacity:1"></div>
     <div class="ring" style="inset:-78px;border-color:rgba(168,85,247,.16);animation:spinCW 22s linear infinite;opacity:1"></div>
     <div class="ring" style="inset:-104px;border-color:rgba(168,85,247,.08);border-style:dashed;animation:spinCCW 30s linear infinite;opacity:1"></div>
-    <div class="orb" style="background:conic-gradient(from 0deg,#5b21b6,#8b5cf6,#c026d3,#f59e0b,#10b981,#06b6d4,#3b82f6,#5b21b6);box-shadow:0 0 110px rgba(139,92,246,.65),0 0 220px rgba(139,92,246,.28);filter:blur(2px);animation:breathe 2s ease-in-out infinite,hueShift 9s ease-in-out infinite"></div>
+    <div class="orb" style="background:conic-gradient(from 0deg,#5b21b6,#8b5cf6,#c026d3,#f59e0b,#10b981,#06b6d4,#3b82f6,#5b21b6);box-shadow:0 0 110px rgba(139,92,246,.65),0 0 220px rgba(139,92,246,.25)"></div>
     <div class="orb-shine" style="animation:breathe 2s ease-in-out infinite"></div>
   </div>
   <h2 id="scan-name-label" style="font-family:'Cinzel',serif;font-size:clamp(.95rem,3vw,1.3rem);letter-spacing:.1em;color:rgba(200,170,255,.9);margin-bottom:10px"></h2>
@@ -277,7 +460,7 @@ input:focus{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 3px rgba(139,92,24
   <p id="progress-pct" style="font-family:'Cinzel',serif;font-size:.66rem;letter-spacing:.22em;color:rgba(139,92,246,.4);margin-top:9px;width:320px;max-width:80vw;text-align:right">0%</p>
 </div>
 
-<!-- RESULTS -->
+<!-- RESULTS SCREEN -->
 <div id="screen-results" class="screen hidden" style="padding-top:60px;padding-bottom:60px">
   <div class="results-inner">
 
@@ -318,34 +501,46 @@ input:focus{border-color:rgba(139,92,246,.7);box-shadow:0 0 0 3px rgba(139,92,24
     </div>
 
     <div style="display:flex;flex-direction:column;align-items:center;gap:16px;animation:fadeUp 2.2s ease both">
-      <button class="btn-email" id="btn-email">&#10022; Send Reading to My Email</button>
+      <button class="btn-email" id="btn-email">✦ Send Reading to My Email</button>
       <p id="email-status" style="color:rgba(52,211,153,.75);font-size:.88rem;font-style:italic;min-height:22px"></p>
       <button class="btn-ghost" id="btn-reset">Begin a New Reading</button>
     </div>
 
     <p style="margin-top:60px;font-size:.74rem;font-style:italic;color:rgba(180,150,255,.15);letter-spacing:.06em">
-      Channeled through chromotherapy, frequency science &amp; the ancient wisdom of light
+      Channeled through chromotherapy, frequency science & the ancient wisdom of light
     </p>
   </div>
 </div>
 
 <script>
+// ──────────────────────────────────────────────────────────────────────────
+// STARFIELD GENERATION
+// ──────────────────────────────────────────────────────────────────────────
+
 (function(){
-  var c=document.getElementById('stars');
-  for(var i=0;i<160;i++){
-    var s=document.createElement('div');
-    s.className='star';
-    var d=(Math.random()*3+2).toFixed(1);
-    var dl=(Math.random()*6).toFixed(1);
-    var sz=(Math.random()*2+0.4).toFixed(1);
-    s.style.cssText='left:'+( Math.random()*100).toFixed(1)+'%;top:'+(Math.random()*100).toFixed(1)+'%;width:'+sz+'px;height:'+sz+'px;--d:'+d+'s;--dl:'+dl+'s';
-    c.appendChild(s);
+  var container = document.getElementById('stars');
+  for(var i = 0; i < 160; i++){
+    var star = document.createElement('div');
+    star.className = 'star';
+    var duration = (Math.random() * 3 + 2).toFixed(1);
+    var delay = (Math.random() * 6).toFixed(1);
+    var size = (Math.random() * 2 + 0.4).toFixed(1);
+    star.style.cssText = 'left:' + (Math.random() * 100).toFixed(1) + '%;top:' + (Math.random() * 100).toFixed(1) + '%;width:' + size + 'px;height:' + size + 'px;--d:' + duration + 's;--dl:' + delay + 's';
+    container.appendChild(star);
   }
 })();
 
-var userName='', userEmail='', auraData=null;
-var scanInt=null, msgInt=null;
-var msgs=[
+// ──────────────────────────────────────────────────────────────────────────
+// STATE MANAGEMENT
+// ──────────────────────────────────────────────────────────────────────────
+
+var userName = '';
+var userEmail = '';
+var auraData = null;
+var scanInterval = null;
+var msgInterval = null;
+
+var scanMessages = [
   'Attuning to your electromagnetic signature...',
   'Reading vibrational layers across the chakric spectrum...',
   'Consulting the ancient library of color wisdom...',
@@ -355,171 +550,302 @@ var msgs=[
   'Synthesizing your unique auric constellation...'
 ];
 
-function show(id){
-  ['screen-intro','screen-scan','screen-results'].forEach(function(s){
-    document.getElementById(s).classList.toggle('hidden', s!==id);
+// ──────────────────────────────────────────────────────────────────────────
+// UI FUNCTIONS
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Show a specific screen by ID (intro, scan, or results)
+ */
+function show(screenId) {
+  ['screen-intro', 'screen-scan', 'screen-results'].forEach(function(id) {
+    document.getElementById(id).classList.toggle('hidden', id !== screenId);
   });
 }
 
-function makeOrb(hex, size, rings){
-  var wrap=document.createElement('div');
-  wrap.style.cssText='position:relative;width:'+size+'px;height:'+size+'px;margin:0 auto';
-  for(var i=0;i<rings;i++){
-    var r=document.createElement('div');
-    var off=(i+1)*18;
-    r.style.cssText='position:absolute;inset:-'+off+'px;border-radius:50%;border:1px solid '+hex+';opacity:.35;animation:ringOut '+(2.4+i*.8)+'s '+(i*.9)+'s ease-out infinite';
-    wrap.appendChild(r);
+/**
+ * Create an animated orb element with rings
+ */
+function makeOrb(hexColor, size, numRings) {
+  var wrap = document.createElement('div');
+  wrap.style.cssText = 'position:relative;width:' + size + 'px;height:' + size + 'px;margin:0 auto';
+  
+  // Create rings
+  for(var i = 0; i < numRings; i++) {
+    var ring = document.createElement('div');
+    var offset = (i + 1) * 18;
+    ring.style.cssText = 'position:absolute;inset:-' + offset + 'px;border-radius:50%;border:1px solid ' + hexColor + ';opacity:.35;animation:ringOut ' + (2.4 + i * 0.8) + 's ' + (i * 0.9) + 's ease-out infinite';
+    wrap.appendChild(ring);
   }
-  var orb=document.createElement('div');
-  orb.style.cssText='width:100%;height:100%;border-radius:50%;animation:breathe 3.5s ease-in-out infinite;background:radial-gradient(circle at 38% 34%,'+hex+'ff,'+hex+'99,'+hex+'22);box-shadow:0 0 42px '+hex+'55,0 0 90px '+hex+'28';
-  var shine=document.createElement('div');
-  shine.style.cssText='position:absolute;inset:18%;border-radius:50%;background:radial-gradient(circle at 40% 40%,rgba(255,255,255,.3),transparent);pointer-events:none';
+  
+  // Create main orb
+  var orb = document.createElement('div');
+  orb.style.cssText = 'width:100%;height:100%;border-radius:50%;animation:breathe 3.5s ease-in-out infinite;background:radial-gradient(circle at 38% 34%,' + hexColor + 'ff,' + hexColor + '99,' + hexColor + '22);box-shadow:0 0 40px ' + hexColor + '80,inset 0 0 30px rgba(255,255,255,.1)';
+  
+  // Create shine effect
+  var shine = document.createElement('div');
+  shine.style.cssText = 'position:absolute;inset:18%;border-radius:50%;background:radial-gradient(circle at 40% 40%,rgba(255,255,255,.3),transparent);pointer-events:none';
+  
   wrap.appendChild(orb);
   wrap.appendChild(shine);
   return wrap;
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// EVENT LISTENERS
+// ──────────────────────────────────────────────────────────────────────────
+
 document.getElementById('btn-start').addEventListener('click', startReading);
-document.getElementById('inp-name').addEventListener('keydown', function(e){ if(e.key==='Enter') startReading(); });
-document.getElementById('inp-email').addEventListener('keydown', function(e){ if(e.key==='Enter') startReading(); });
+document.getElementById('inp-name').addEventListener('keydown', function(e) { if(e.key === 'Enter') startReading(); });
+document.getElementById('inp-email').addEventListener('keydown', function(e) { if(e.key === 'Enter') startReading(); });
 
-function startReading(){
-  userName=document.getElementById('inp-name').value.trim();
-  userEmail=document.getElementById('inp-email').value.trim();
-  var err=document.getElementById('intro-error');
-  if(!userName){ err.textContent='Please enter your name to begin your reading.'; return; }
-  if(!userEmail.includes('@')){ err.textContent='Please enter a valid email address.'; return; }
-  err.textContent='';
+// ──────────────────────────────────────────────────────────────────────────
+// READING GENERATION
+// ──────────────────────────────────────────────────────────────────────────
+
+/**
+ * Start the aura reading process
+ */
+function startReading() {
+  userName = document.getElementById('inp-name').value.trim();
+  userEmail = document.getElementById('inp-email').value.trim();
+  var errorEl = document.getElementById('intro-error');
+  
+  // Validate inputs
+  if(!userName) {
+    errorEl.textContent = 'Please enter your name to begin your reading.';
+    return;
+  }
+  if(!userEmail.includes('@')) {
+    errorEl.textContent = 'Please enter a valid email address.';
+    return;
+  }
+  
+  errorEl.textContent = '';
   show('screen-scan');
-  document.getElementById('scan-name-label').textContent='Reading Your Aura, '+userName;
-  var pct=0, msgIdx=0;
-  var fill=document.getElementById('progress-fill');
-  var pctEl=document.getElementById('progress-pct');
-  var msgEl=document.getElementById('scan-msg');
-  scanInt=setInterval(function(){
-    pct=Math.min(pct+Math.random()*8+2, 87);
-    fill.style.width=pct.toFixed(0)+'%';
-    pctEl.textContent=pct.toFixed(0)+'%';
+  document.getElementById('scan-name-label').textContent = 'Reading Your Aura, ' + userName;
+  
+  // Initialize progress tracking
+  var progress = 0;
+  var messageIndex = 0;
+  var progressBar = document.getElementById('progress-fill');
+  var progressPercent = document.getElementById('progress-pct');
+  var messageEl = document.getElementById('scan-msg');
+  
+  // Animate progress bar
+  scanInterval = setInterval(function() {
+    progress = Math.min(progress + Math.random() * 8 + 2, 87);
+    progressBar.style.width = progress.toFixed(0) + '%';
+    progressPercent.textContent = progress.toFixed(0) + '%';
   }, 700);
-  msgInt=setInterval(function(){
-    msgIdx=(msgIdx+1)%msgs.length;
-    msgEl.style.opacity=0;
-    setTimeout(function(){ msgEl.textContent=msgs[msgIdx]; msgEl.style.opacity=1; }, 300);
+  
+  // Cycle scanning messages
+  msgInterval = setInterval(function() {
+    messageIndex = (messageIndex + 1) % scanMessages.length;
+    messageEl.style.opacity = 0;
+    setTimeout(function() {
+      messageEl.textContent = scanMessages[messageIndex];
+      messageEl.style.opacity = 1;
+    }, 300);
   }, 2400);
-
-  fetch('/api/reading',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({name:userName})
+  
+  // Fetch aura reading from API
+  fetch('/api/reading', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: userName })
   })
-  .then(function(r){ return r.json(); })
-  .then(function(data){
-    clearInterval(scanInt); clearInterval(msgInt);
+  .then(function(response) { return response.json(); })
+  .then(function(data) {
+    clearInterval(scanInterval);
+    clearInterval(msgInterval);
+    
     if(data.error) throw new Error(data.error);
-    auraData=data;
-    fill.style.width='100%'; pctEl.textContent='100%';
+    
+    auraData = data;
+    progressBar.style.width = '100%';
+    progressPercent.textContent = '100%';
+    
     setTimeout(renderResults, 1000);
   })
-  .catch(function(e){
-    clearInterval(scanInt); clearInterval(msgInt);
-    document.getElementById('intro-error').textContent=e.message||'Oracle connection failed. Please try again.';
+  .catch(function(error) {
+    clearInterval(scanInterval);
+    clearInterval(msgInterval);
+    document.getElementById('intro-error').textContent = error.message || 'Oracle connection failed. Please try again.';
     show('screen-intro');
   });
 }
 
-function renderResults(){
-  var subHues=auraData.subHues, finalHue=auraData.finalHue;
-  document.getElementById('res-name').textContent=userName;
+// ──────────────────────────────────────────────────────────────────────────
+// RESULTS RENDERING
+// ──────────────────────────────────────────────────────────────────────────
 
-  var grid=document.getElementById('cards-grid');
-  grid.innerHTML='';
-  subHues.forEach(function(h){
-    var card=document.createElement('div');
-    card.className='hue-card';
-    card.style.border='1px solid '+h.hex+'44';
-    card.style.boxShadow='0 0 34px '+h.hex+'1c,inset 0 0 22px '+h.hex+'09';
-    var orbDiv=document.createElement('div');
-    orbDiv.style.marginBottom='20px';
-    orbDiv.appendChild(makeOrb(h.hex, 88, 2));
+/**
+ * Render the aura reading results
+ */
+function renderResults() {
+  var subHues = auraData.subHues;
+  var finalHue = auraData.finalHue;
+  
+  // Display name
+  document.getElementById('res-name').textContent = userName;
+  
+  // Render sub-hue cards
+  var grid = document.getElementById('cards-grid');
+  grid.innerHTML = '';
+  
+  subHues.forEach(function(hue) {
+    var card = document.createElement('div');
+    card.className = 'hue-card';
+    card.style.border = '1px solid ' + hue.hex + '44';
+    card.style.boxShadow = '0 0 34px ' + hue.hex + '1c,inset 0 0 22px ' + hue.hex + '09';
+    
+    // Orb
+    var orbDiv = document.createElement('div');
+    orbDiv.style.marginBottom = '20px';
+    orbDiv.appendChild(makeOrb(hue.hex, 88, 2));
     card.appendChild(orbDiv);
-
-    var title=document.createElement('h3');
-    title.style.cssText='font-family:Cinzel,serif;font-size:.96rem;letter-spacing:.07em;color:'+h.hex+';text-shadow:0 0 24px '+h.hex+'72;margin-bottom:14px';
-    title.textContent=h.name;
+    
+    // Title
+    var title = document.createElement('h3');
+    title.style.cssText = 'font-family:Cinzel,serif;font-size:.96rem;letter-spacing:.07em;color:' + hue.hex + ';text-shadow:0 0 24px ' + hue.hex + '72;margin-bottom:14px';
+    title.textContent = hue.name;
     card.appendChild(title);
-
-    var tags=document.createElement('div');
-    tags.style.marginBottom='16px';
-    [[h.element,h.hex],[h.frequency+' Hz','#a855f7'],[h.emotion,'#ec4899']].forEach(function(t){
-      var s=document.createElement('span');
-      s.className='tag';
-      s.style.cssText='border:1px solid '+t[1]+'36;color:'+t[1]+';background:'+t[1]+'0f';
-      s.textContent=t[0];
-      tags.appendChild(s);
+    
+    // Tags
+    var tags = document.createElement('div');
+    tags.style.marginBottom = '16px';
+    [[hue.element, hue.hex], [hue.frequency + ' Hz', '#a855f7'], [hue.emotion, '#ec4899']].forEach(function(tag) {
+      var span = document.createElement('span');
+      span.className = 'tag';
+      span.style.cssText = 'border:1px solid ' + tag[1] + '36;color:' + tag[1] + ';background:' + tag[1] + '0f';
+      span.textContent = tag[0];
+      tags.appendChild(span);
     });
     card.appendChild(tags);
-
-    var desc=document.createElement('p');
-    desc.style.cssText='font-size:.93rem;line-height:1.82;color:rgba(210,192,255,.7);font-style:italic';
-    desc.textContent=h.description;
+    
+    // Description
+    var desc = document.createElement('p');
+    desc.style.cssText = 'font-size:.93rem;line-height:1.82;color:rgba(210,192,255,.7);font-style:italic';
+    desc.textContent = hue.description;
     card.appendChild(desc);
+    
     grid.appendChild(card);
   });
-
-  var fw=document.getElementById('final-orb-wrap');
-  fw.innerHTML='';
-  fw.appendChild(makeOrb(finalHue.hex, 170, 3));
-
-  var fn=document.getElementById('final-hue-name');
-  fn.textContent=finalHue.name;
-  fn.style.color=finalHue.hex;
-  fn.style.textShadow='0 0 40px '+finalHue.hex+'84';
-  document.getElementById('final-hue-desc').textContent=finalHue.description;
-  document.getElementById('aurascope-text').textContent=auraData.aurascope;
-  document.getElementById('mantra-text').textContent='"'+auraData.mantra+'"';
-
+  
+  // Render final orb
+  var finalOrbWrap = document.getElementById('final-orb-wrap');
+  finalOrbWrap.innerHTML = '';
+  finalOrbWrap.appendChild(makeOrb(finalHue.hex, 170, 3));
+  
+  // Display final hue details
+  var finalHueName = document.getElementById('final-hue-name');
+  finalHueName.textContent = finalHue.name;
+  finalHueName.style.color = finalHue.hex;
+  finalHueName.style.textShadow = '0 0 40px ' + finalHue.hex + '84';
+  
+  document.getElementById('final-hue-desc').textContent = finalHue.description;
+  document.getElementById('aurascope-text').textContent = auraData.aurascope;
+  document.getElementById('mantra-text').textContent = '"' + auraData.mantra + '"';
+  
+  // Show results screen
   show('screen-results');
-  window.scrollTo({top:0,behavior:'smooth'});
+  window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-document.getElementById('btn-email').addEventListener('click', function(){
+// ──────────────────────────────────────────────────────────────────────────
+// EMAIL & RESET
+// ──────────────────────────────────────────────────────────────────────────
+
+document.getElementById('btn-email').addEventListener('click', function() {
   if(!auraData) return;
-  var h=auraData.subHues, f=auraData.finalHue, ln='\n', bar='='.repeat(50);
-  var body=[
+  
+  var h = auraData.subHues;
+  var f = auraData.finalHue;
+  var lineBreak = '\\n';
+  var bar = '='.repeat(50);
+  
+  var emailBody = [
     '✦  YOUR LIVING AURA READING  ✦',
-    'Channeled for: '+userName, ln,
-    bar,'THREE AURIC SUB-FREQUENCIES',bar,ln,
-    '◈  '+h[0].name.toUpperCase(), '    '+h[0].frequency+' Hz  ·  '+h[0].element+'  ·  '+h[0].emotion, ln, '    '+h[0].description, ln,
-    '◈  '+h[1].name.toUpperCase(), '    '+h[1].frequency+' Hz  ·  '+h[1].element+'  ·  '+h[1].emotion, ln, '    '+h[1].description, ln,
-    '◈  '+h[2].name.toUpperCase(), '    '+h[2].frequency+' Hz  ·  '+h[2].element+'  ·  '+h[2].emotion, ln, '    '+h[2].description, ln,
-    bar,'YOUR SIGNATURE AURA: '+f.name.toUpperCase(),bar,ln,
-    f.description,ln,
-    bar,'YOUR AURASCOPE',bar,ln,
-    auraData.aurascope,ln,
-    bar,'YOUR SACRED MANTRA',bar,ln,
-    '"'+auraData.mantra+'"',ln,
-    '✦  ✦  ✦','Channeled through Aurascope — the living aura oracle'
-  ].join('\n');
-  var a=document.createElement('a');
-  a.href='mailto:'+encodeURIComponent(userEmail)+'?subject='+encodeURIComponent('✦ Your Aurascope: '+f.name+' — A Reading for '+userName)+'&body='+encodeURIComponent(body);
-  a.click();
-  document.getElementById('email-status').textContent='✦ Opening your email client with the full reading...';
+    'Channeled for: ' + userName,
+    lineBreak,
+    bar + 'THREE AURIC SUB-FREQUENCIES' + bar,
+    lineBreak,
+    '◈  ' + h[0].name.toUpperCase() + '    ' + h[0].frequency + ' Hz  ·  ' + h[0].element + '  ·  ' + h[0].emotion,
+    lineBreak,
+    '    ' + h[0].description,
+    lineBreak,
+    '◈  ' + h[1].name.toUpperCase() + '    ' + h[1].frequency + ' Hz  ·  ' + h[1].element + '  ·  ' + h[1].emotion,
+    lineBreak,
+    '    ' + h[1].description,
+    lineBreak,
+    '◈  ' + h[2].name.toUpperCase() + '    ' + h[2].frequency + ' Hz  ·  ' + h[2].element + '  ·  ' + h[2].emotion,
+    lineBreak,
+    '    ' + h[2].description,
+    lineBreak,
+    bar + 'YOUR SIGNATURE AURA: ' + f.name.toUpperCase() + bar,
+    lineBreak,
+    f.description,
+    lineBreak,
+    bar + 'YOUR AURASCOPE' + bar,
+    lineBreak,
+    auraData.aurascope,
+    lineBreak,
+    bar + 'YOUR SACRED MANTRA' + bar,
+    lineBreak,
+    '"' + auraData.mantra + '"',
+    lineBreak,
+    '✦  ✦  ✦',
+    'Channeled through Aurascope — the living aura oracle'
+  ].join(lineBreak);
+  
+  var mailLink = document.createElement('a');
+  mailLink.href = 'mailto:' + encodeURIComponent(userEmail) + '?subject=' + encodeURIComponent('✦ Your Aurascope: ' + f.name + ' — A Reading for ' + userName) + '&body=' + encodeURIComponent(emailBody);
+  mailLink.click();
+  
+  document.getElementById('email-status').textContent = '✦ Opening your email client with the full reading...';
 });
 
-document.getElementById('btn-reset').addEventListener('click', function(){
-  auraData=null;
-  document.getElementById('inp-name').value='';
-  document.getElementById('inp-email').value='';
-  document.getElementById('email-status').textContent='';
-  document.getElementById('intro-error').textContent='';
+document.getElementById('btn-reset').addEventListener('click', function() {
+  auraData = null;
+  document.getElementById('inp-name').value = '';
+  document.getElementById('inp-email').value = '';
+  document.getElementById('email-status').textContent = '';
+  document.getElementById('intro-error').textContent = '';
   show('screen-intro');
-  window.scrollTo({top:0});
+  window.scrollTo({ top: 0 });
 });
 </script>
 </body>
 </html>`;
 
-app.get("*", (req, res) => res.send(HTML));
+// ────────────────────────────────────────────────────────────────────────────
+// SERVE APPLICATION
+// ────────────────────────────────────────────────────────────────────────────
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Aurascope running on port", PORT));
+/**
+ * Serve the embedded HTML UI for all routes
+ */
+app.get("*", (req, res) => {
+  res.send(HTML);
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// START SERVER
+// ────────────────────────────────────────────────────────────────────────────
+
+app.listen(PORT, () => {
+  console.log(`
+╔════════════════════════════════════════════════════════════════════╗
+║                                                                    ║
+║  🌟  AURASCOPE: Real-Time Digital Aura Generator                  ║
+║                                                                    ║
+║  ✦ Server running on http://localhost:${PORT}                        ║
+║  ✦ API endpoint: POST /api/reading                                 ║
+║  ✦ Database: Claude AI (Anthropic)                                ║
+║                                                                    ║
+║  Ready to reveal your aura...                                     ║
+║                                                                    ║
+╚════════════════════════════════════════════════════════════════════╝
+  `);
+});
